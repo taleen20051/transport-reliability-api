@@ -13,9 +13,7 @@ from sqlalchemy import engine_from_config, pool
 # within the .ini file in use.
 config = context.config
 
-# ------------------------------------------------------------
 # FIX: Ensure we can import `app.*` and always load .env from repo root
-# ------------------------------------------------------------
 PROJECT_ROOT = Path(__file__).resolve().parents[1]  # repo root (folder containing alembic.ini)
 sys.path.insert(0, str(PROJECT_ROOT))
 
