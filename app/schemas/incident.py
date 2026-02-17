@@ -5,7 +5,6 @@ from pydantic import BaseModel, Field
 
 
 class IncidentCreate(BaseModel):
-    user_id: int
     route_id: int
     station_id: Optional[int] = None
     delay_minutes: int = Field(ge=0)
