@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class StationCreate(BaseModel):
@@ -23,5 +23,5 @@ class StationOut(BaseModel):
     lat: Optional[float]
     lon: Optional[float]
 
-    class Config:
-        from_attributes = True
+    # Pydantic v2 replacement for class Config/from_attributes
+    model_config = ConfigDict(from_attributes=True)

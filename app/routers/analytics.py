@@ -4,20 +4,26 @@ from datetime import date, datetime, time, timezone, timedelta
 from typing import Optional, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import Integer, func
 from sqlalchemy.orm import Session
-from sqlalchemy import func, Integer
 
 from app.db.deps import get_db
-from app.models.user_incident import UserIncident
 from app.models.station import Station
+from app.models.user_incident import UserIncident
 from app.schemas.analytics import (
-    ReliabilityOut,
     DelayBucketOut,
     HotspotOut,
     HotspotsResponse,
+    ReliabilityOut,
 )
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
+
+ANALYTICS_ERROR_RESPONSES = {
+    400: {"description": "Bad Request (invalid query parameter)"},
+    404: {"description": "Not Found (route/station not found where applicable)"},
+    422: {"description": "Validation Error (invalid parameter type/range)"},
+}
 
 
 def _date_to_utc_bounds(d: date) -> tuple[datetime, datetime]:
@@ -30,12 +36,22 @@ def _date_to_utc_bounds(d: date) -> tuple[datetime, datetime]:
     return start, end
 
 
-@router.get("/routes/{route_id}/reliability", response_model=ReliabilityOut)
+@router.get(
+    "/routes/{route_id}/reliability",
+    response_model=ReliabilityOut,
+    responses={422: ANALYTICS_ERROR_RESPONSES[422]},
+)
 def reliability_per_route(
     route_id: int,
-    from_date: Optional[date] = Query(default=None, description="Filter incidents from this date (inclusive)"),
-    to_date: Optional[date] = Query(default=None, description="Filter incidents to this date (inclusive)"),
-    threshold_minutes: int = Query(default=5, ge=0, description="Delay threshold for 'on-time'"),
+    from_date: Optional[date] = Query(
+        default=None, description="Filter incidents from this date (inclusive)"
+    ),
+    to_date: Optional[date] = Query(
+        default=None, description="Filter incidents to this date (inclusive)"
+    ),
+    threshold_minutes: int = Query(
+        default=5, ge=0, description="Delay threshold for 'on-time' (minutes)"
+    ),
     db: Session = Depends(get_db),
 ):
     q = db.query(UserIncident).filter(UserIncident.route_id == route_id)
@@ -74,79 +90,85 @@ def reliability_per_route(
     )
 
 
-@router.get("/delays/distribution", response_model=list[DelayBucketOut])
+@router.get(
+    "/delays/distribution",
+    response_model=list[DelayBucketOut],
+    responses={400: ANALYTICS_ERROR_RESPONSES[400], 422: ANALYTICS_ERROR_RESPONSES[422]},
+)
 def delay_distribution(
-    group_by: str = "hour",
-    route_id: int | None = None,
+    group_by: Literal["hour", "weekday"] = Query(
+        default="hour", description="Bucket incidents by hour or weekday"
+    ),
+    route_id: int | None = Query(default=None, description="Optional route filter"),
     db: Session = Depends(get_db),
 ):
-    # Build the bucket expression (the thing we group by)
+    # Build the bucket expression (grouping key)
     if group_by == "hour":
         bucket_expr = func.extract("hour", UserIncident.reported_at).cast(Integer)
-    elif group_by == "weekday":
-        # 0-6 (Sun-Sat) in Postgres when using extract(dow)
-        bucket_expr = func.extract("dow", UserIncident.reported_at).cast(Integer)
     else:
-        raise HTTPException(status_code=400, detail="group_by must be 'hour' or 'weekday'")
+        # 0-6 (Sun-Sat) in Postgres with extract(dow)
+        bucket_expr = func.extract("dow", UserIncident.reported_at).cast(Integer)
 
-    q = (
-        db.query(
-            bucket_expr.label("bucket"),
-            func.count(UserIncident.id).label("count"),
-            func.avg(UserIncident.delay_minutes).label("avg_delay"),
-        )
-        .select_from(UserIncident)
-    )
+    q = db.query(
+        bucket_expr.label("bucket"),
+        func.count(UserIncident.id).label("count"),
+        func.avg(UserIncident.delay_minutes).label("avg_delay"),
+    ).select_from(UserIncident)
 
     if route_id is not None:
         q = q.filter(UserIncident.route_id == route_id)
 
-    # IMPORTANT: group_by/order_by using the *expression*, NOT "bucket" string
     rows = q.group_by(bucket_expr).order_by(bucket_expr).all()
 
     return [
-        DelayBucketOut(bucket=int(bucket), count=int(count), avg_delay=float(avg_delay or 0.0))
+        DelayBucketOut(
+            bucket=int(bucket),
+            count=int(count),
+            avg_delay=float(avg_delay or 0.0),
+        )
         for (bucket, count, avg_delay) in rows
     ]
 
 
-@router.get("/stations/hotspots", response_model=HotspotsResponse)
+@router.get(
+    "/stations/hotspots",
+    response_model=HotspotsResponse,
+    responses={422: ANALYTICS_ERROR_RESPONSES[422]},
+)
 def hotspot_stations(
-    window_days: int = Query(default=30, ge=1, le=365),
-    limit: int = Query(default=10, ge=1, le=50),
+    window_days: int = Query(default=30, ge=1, le=365, description="Lookback window in days"),
+    limit: int = Query(default=10, ge=1, le=50, description="Max results to return"),
     db: Session = Depends(get_db),
 ):
     since = datetime.now(timezone.utc) - timedelta(days=window_days)
 
-    # Only incidents that have a station_id
+    # Efficient: aggregate + join station name in one query (no per-row lookups)
     rows = (
         db.query(
             UserIncident.station_id.label("station_id"),
+            Station.name.label("station_name"),
             func.count(UserIncident.id).label("incident_count"),
             func.avg(UserIncident.delay_minutes).label("avg_delay"),
         )
+        .join(Station, Station.id == UserIncident.station_id)
         .filter(UserIncident.station_id.isnot(None))
         .filter(UserIncident.reported_at >= since)
-        .group_by(UserIncident.station_id)
+        .group_by(UserIncident.station_id, Station.name)
         .all()
     )
 
-    # Join station names + compute pain index = count * avg_delay
     results: list[HotspotOut] = []
-    for r in rows:
-        station = db.query(Station).filter(Station.id == r.station_id).first()
-        station_name = station.name if station else f"station_{r.station_id}"
-
-        avg_delay = float(r.avg_delay or 0.0)
-        incident_count = int(r.incident_count)
-        pain_index = round(incident_count * avg_delay, 2)
+    for station_id, station_name, incident_count, avg_delay in rows:
+        avg_delay_f = float(avg_delay or 0.0)
+        incident_count_i = int(incident_count)
+        pain_index = round(incident_count_i * avg_delay_f, 2)
 
         results.append(
             HotspotOut(
-                station_id=int(r.station_id),
+                station_id=int(station_id),
                 station_name=station_name,
-                incident_count=incident_count,
-                avg_delay=round(avg_delay, 2),
+                incident_count=incident_count_i,
+                avg_delay=round(avg_delay_f, 2),
                 pain_index=pain_index,
             )
         )

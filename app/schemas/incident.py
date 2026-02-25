@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class IncidentCreate(BaseModel):
@@ -28,5 +28,5 @@ class IncidentOut(BaseModel):
     category: str
     description: str
 
-    class Config:
-        from_attributes = True
+    # Pydantic v2 replacement for class Config/from_attributes
+    model_config = ConfigDict(from_attributes=True)

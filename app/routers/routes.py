@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.db.auth_deps import get_current_user
@@ -11,8 +11,19 @@ from app.schemas.route import RouteCreate, RouteOut, RouteUpdate
 
 router = APIRouter(prefix="/routes", tags=["routes"])
 
+ROUTE_ERROR_RESPONSES = {
+    401: {"description": "Unauthorized (missing/invalid Bearer token)"},
+    404: {"description": "Not Found (route_id does not exist)"},
+    422: {"description": "Validation Error (invalid payload)"},
+}
 
-@router.post("", response_model=RouteOut, status_code=status.HTTP_201_CREATED)
+
+@router.post(
+    "",
+    response_model=RouteOut,
+    status_code=status.HTTP_201_CREATED,
+    responses={401: ROUTE_ERROR_RESPONSES[401], 422: ROUTE_ERROR_RESPONSES[422]},
+)
 def create_route(
     payload: RouteCreate,
     db: Session = Depends(get_db),
@@ -25,7 +36,11 @@ def create_route(
     return route
 
 
-@router.get("/{route_id}", response_model=RouteOut)
+@router.get(
+    "/{route_id}",
+    response_model=RouteOut,
+    responses={404: ROUTE_ERROR_RESPONSES[404]},
+)
 def get_route(route_id: int, db: Session = Depends(get_db)):
     route = db.query(Route).filter(Route.id == route_id).first()
     if not route:
@@ -33,7 +48,20 @@ def get_route(route_id: int, db: Session = Depends(get_db)):
     return route
 
 
-@router.patch("/{route_id}", response_model=RouteOut)
+@router.get("", response_model=list[RouteOut])
+def list_routes(
+    db: Session = Depends(get_db),
+    limit: int = Query(default=100, ge=1, le=500, description="Max number of routes to return"),
+    offset: int = Query(default=0, ge=0, description="Pagination offset"),
+):
+    return db.query(Route).order_by(Route.id).offset(offset).limit(limit).all()
+
+
+@router.patch(
+    "/{route_id}",
+    response_model=RouteOut,
+    responses=ROUTE_ERROR_RESPONSES,
+)
 def update_route(
     route_id: int,
     payload: RouteUpdate,
@@ -52,7 +80,11 @@ def update_route(
     return route
 
 
-@router.delete("/{route_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{route_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={401: ROUTE_ERROR_RESPONSES[401], 404: ROUTE_ERROR_RESPONSES[404]},
+)
 def delete_route(
     route_id: int,
     db: Session = Depends(get_db),
@@ -64,3 +96,4 @@ def delete_route(
 
     db.delete(route)
     db.commit()
+    return None
