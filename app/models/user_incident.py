@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from app.models.user import User
 
 
+# Represents a user-reported incident affecting a route and optionally a station
 class UserIncident(Base):
     __tablename__ = "user_incidents"
 
@@ -30,6 +31,7 @@ class UserIncident(Base):
         index=True,
     )
 
+    # Delay in minutes caused by the incident
     delay_minutes: Mapped[int] = mapped_column(nullable=False)
     category: Mapped[str | None] = mapped_column(String(50), nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)

@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from app.models.user_incident import UserIncident
 
 
+# Represents a station or stop in the public transport network
 class Station(Base):
     __tablename__ = "stations"
 

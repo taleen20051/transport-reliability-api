@@ -1,272 +1,308 @@
-# **Transport Reliability & Incident Analytics API**
+# **Public Transport Reliability & Incident Analytics API**
 
-This project implements a RESTful API for analysing public transport reliability using route data, station data, and user-reported delay incidents. It provides secure CRUD operations and analytical endpoints for evaluating transport performance.
+A data-driven RESTful API designed to analyse public transport reliability using user-reported delay incidents and real UK transport infrastructure data.
 
-## **Project Overview**
+This project was developed for the COMP3011 - Web Services and Web Data coursework.
 
-The API models:
+The system combines CRUD operations, authentication, database persistence, and analytical endpoints to evaluate transport reliability and identify operational bottlenecks.
+
+# **Project Overview**
+
+Public transport networks generate large volumes of operational data, yet this information is rarely exposed through structured analytics-ready APIs. Without quantitative reliability metrics and hotspot detection, decision-making remains reactive rather than data-driven.
+
+This project addresses that problem by implementing a **RESTful analytics API** that enables:
+
+* Structured management of transport infrastructure data
+* User-reported delay incident tracking
+* Quantitative reliability analysis
+* Temporal delay pattern analysis
+* Station-level hotspot detection
+
+The system is designed using production-oriented backend architecture, prioritising modularity, documentation quality, testing, and reproducibility.
+
+# **Key Features**
+
+## **CRUD Data Management**
+
+The API implements full **Create, Read, Update, Delete** functionality for core entities:
 
 * Routes
 * Stations
-* User-reported incidents (delays/disruptions) created by authenticated users
+* UserIncidents
 
-It supports:
+Authenticated users can create, update, and delete incidents while maintaining ownership enforcement.
 
-* CRUD operations for core entities
-* JWT-secured write operations
-* Analytics endpoints (reliability, delay distributions, hotspot stations)
-* PostgreSQL persistence with SQLAlchemy + Alembic migrations
-* OpenAPI / Swagger documentation
+## **Analytical Endpoints**
 
-## **Tech Stack**
+Beyond basic CRUD functionality, the API exposes analytical endpoints that compute aggregated transport performance indicators.
 
-* FastAPI (Python)
-* PostgreSQL
-* SQLAlchemy
-* Alembic
-* Argon2 (password hashing)
-* JWT (authentication)
-* pytest (testing)
-* Uvicorn (server)
+### **Route Reliability**
 
-## **Database Schema**
+Calculates the percentage of incidents where delays fall below a specified threshold.
+GET /analytics/routes/{route_id}/reliability
 
-Core tables:
+Example response:
 
-* users
-* routes
-* stations
-* route_stations (junction table)
-* user_incidents
+```
+{
+  "route_id": 8,
+  "total_incidents": 12,
+  "on_time_incidents": 9,
+  "reliability_percent": 75
+}
+```
 
-Key rules:
+### Delay Distribution
 
-* A user can create many incidents
-* Users can only update/delete incidents they created (ownership enforcement)
-* Routes and stations are linked via route_stations
+Aggregates delays by hour or weekday to identify temporal patterns.
 
-## **Authentication**
+GET /analytics/delays/distribution?group_by=weekday
 
-JWT Bearer tokens.
+Example response:
 
-Endpoints:
+```
+[
+  {
+    "bucket": 0,
+    "count": 12,
+    "avg_delay": 7.5
+  }
+]
+```
 
-* POST /auth/register
-* POST /auth/login
+### Station Hotspots
 
-Protected endpoints (JWT required):
+Identifies stations with the highest operational disruption.
 
-* POST /routes
-* POST /stations
-* POST /incidents
-* PATCH /incidents/{id}
-* DELETE /incidents/{id}
+`GET /analytics/stations/hotspots`
 
-Ownership rule:
+Stations are ranked using the metric:
 
-* Only the incident creator may PATCH/DELETE their incident
+`pain_index = incident_count × average_delay`
 
-## **CRUD Endpoints**
+This balances frequency and severity of disruptions.
 
-Routes:
+# **Technology Stack**
 
-* POST /routes
-* GET /routes
-* GET /routes/{id}
-* PATCH /routes/{id}
-* DELETE /routes/{id}
+| **Layer**      | **Technology**  |
+| -------------------- | --------------------- |
+| Programming Language | Python                |
+| API Framework        | FastAPI               |
+| Database             | PostgreSQL            |
+| ORM                  | SQLAlchemy            |
+| Database Migrations  | Alembic               |
+| Authentication       | JWT (JSON Web Tokens) |
+| Validation           | Pydantic              |
+| Testing              | Pytest                |
+| API Documentation    | OpenAPI / Swagger UI  |
 
-Stations:
+FastAPI was selected for its automatic OpenAPI documentation, strong validation system, and dependency injection support, enabling clean API design and maintainability.
 
-* POST /stations
-* GET /stations
-* GET /stations/{id}
-* PATCH /stations/{id}
-* DELETE /stations/{id}
+# System Architecture
 
-Incidents:
+The API follows a layered architecture separating HTTP routing, business logic, and persistence.
 
-* POST /incidents
-* GET /incidents/{id}
-* PATCH /incidents/{id}
-* DELETE /incidents/{id}
+Client / HTTP Requests -> FastAPI Routers (API Layer) -> Service Layer (Business Logic) -> Persistence Layer (SQLAlchemy ORM) -> PostgreSQL Database
 
-## **Analytics Endpoints**
+This structure ensures:
 
-Delay distribution:
+* separation of concerns
+* maintainability
+* modular code organisation
+* easier testing and scalability
 
-* GET /analytics/delays/distribution?group_by=hour
-* GET /analytics/delays/distribution?group_by=weekday
+# **Repository Structure**
 
-Route reliability:
+## transport-reliability-api
 
-* GET /analytics/routes/{route_id}/reliability
+│
+├── app
+│   ├── routers        # API endpoint definitions
+│   ├── schemas        # Pydantic request/response models
+│   ├── models         # SQLAlchemy database models
+│   ├── services       # Business logic & analytics computations
+│   ├── auth           # Authentication utilities
+│   └── db             # Database configuration
+│
+├── scripts            # Dataset ingestion scripts
+├── tests              # Pytest integration tests
+├── alembic            # Database migration configuration
+│
+├── API_Documentation.pdf
+├── README.md
+└── requirements.txt
 
-Reliability definition:
+# Setup Instructions
 
-* An incident is considered on-time if delay_minutes <= threshold_minutes (default 5)
-* reliability_percent = (on_time_incidents / total_incidents) * 100
+## 1/ Clone the repository
 
-Hotspot stations:
-
-* GET /analytics/stations/hotspots?window_days=30&limit=10
-
-Hotspot ranking uses:
-
-* pain_index = incident_count * avg_delay
-
-## **Smoke Test (Manual API Verification)**
-
-Assumes the API is running locally at:
-
-http://127.0.0.1:8000
-
-1. Register
-
-curl -i -X POST “http://127.0.0.1:8000/auth/register”** **
-
--H “Content-Type: application/json”** **
-
--d ‘{“email”:“smoke@example.com”,“password”:“StrongPass123”}’
-
-2. Login (copy token)
-
-curl -s -X POST “http://127.0.0.1:8000/auth/login”** **
-
--H “Content-Type: application/x-www-form-urlencoded”** **
-
--d “username=smoke@example.com&password=StrongPass123”
-
-Copy the access_token from the response and set it:
-
-export TOKEN=“PASTE_TOKEN_HERE”
-
-3. Create route (JWT required)
-
-curl -s -X POST “http://127.0.0.1:8000/routes”** **
-
--H “Authorization: Bearer $TOKEN”** **
-
--H “Content-Type: application/json”** **
-
--d ‘{“name”:“Smoke Route”,“mode”:“bus”,“operator”:“Test”}’ | python -m json.tool
-
-4. Create station (JWT required)
-
-curl -s -X POST “http://127.0.0.1:8000/stations”** **
-
--H “Authorization: Bearer $TOKEN”** **
-
--H “Content-Type: application/json”** **
-
--d ‘{“name”:“Smoke Station”,“lat”:53.8,“lon”:-1.55}’ | python -m json.tool
-
-5. Create incident (JWT required)
-
-curl -s -X POST “http://127.0.0.1:8000/incidents”** **
-
--H “Authorization: Bearer $TOKEN”** **
-
--H “Content-Type: application/json”** **
-
--d ‘{“route_id”:5,“station_id”:3,“delay_minutes”:12,“category”:“delay”,“description”:“Smoke test incident”}’ | python -m json.tool
-
-6. Run analytics (public)
-
-curl -s “http://127.0.0.1:8000/analytics/delays/distribution?group_by=hour” | python -m json.tool
-
-curl -s “http://127.0.0.1:8000/analytics/delays/distribution?group_by=weekday” | python -m json.tool
-
-curl -s “http://127.0.0.1:8000/analytics/routes/5/reliability” | python -m json.tool
-
-curl -s “http://127.0.0.1:8000/analytics/stations/hotspots?window_days=30&limit=10” | python -m json.tool
-
-## **Running Locally**
-
-1. Clone
-
-git clone <repository_url>
+git clone https://github.com/YOUR_USERNAME/transport-reliability-api.git
 
 cd transport-reliability-api
 
-2. Virtual environment
+## 2/ Create the environment
 
 python -m venv .venv
-
 source .venv/bin/activate
 
-3. Install dependencies
+Windows: .venv\Scripts\activate
+
+## 3/ Install Dependencies
 
 pip install -r requirements.txt
 
-4. Environment variables
+# Environment Variables
 
-Create a .env file in the project root:
+Create a .env file in the project root.
 
-DATABASE_URL=postgresql+psycopg2://<db_user>:<db_password>@localhost:5432/transportdb
+Example configuration:
 
-JWT_SECRET=<your_secret_here>
+`DATABASE_URL=postgresql+psycopg://username:password@localhost:5432/transport_db `
 
-Optional (recommended for tests):
+`SECRET_KEY=change_this_secret_key `
 
-TEST_DATABASE_URL=postgresql+psycopg2://<db_user>:<db_password>@localhost:5432/transportdb_test
+`ALGORITHM=HS256 `
 
-5. Run migrations
+`ACCESS_TOKEN_EXPIRE_MINUTES=60`
 
-alembic upgrade head
+These variables configure the database connection and JWT authentication system.
 
-6. Start server
+# **Database Setup**
 
-uvicorn app.main:app –reload
+Run Alembic migrations to create the database schema.
 
-## **API Documentation**
+    alembic upgrade head
 
-Swagger UI:
+This initialises all required database tables.
 
-http://127.0.0.1:8000/docs
+# Dataset Import
 
-OpenAPI JSON:
+The system integrates real UK transport infrastructure data from the NaPTAN dataset (National Public Transport Access Nodes).
 
-http://127.0.0.1:8000/openapi.json
+To import station data:
 
-Exported PDF (in this repo):
+    python scripts/import_naptan_stations.py
 
-docs/api-documentation.pdf
+The import process:
 
-## **Demo Dataset (Seeding)**
+* parses CSV dataset entries
+* validates coordinate values
+* skips invalid rows
+* prevents duplicate entries
+* inserts a controlled subset for demonstration purposes
 
-Seed demo incidents:
+# **Running the API**
 
-export $(grep -v ‘^#’ .env | xargs)
+Start the development server using Uvicorn.
 
-PYTHONPATH=$(pwd) python scripts/seed_demo_incidents.py
+`uvicorn app.main:app --reload`
 
-## **Testing**
+The API will run locally at:
 
-Run test suite:
+`http://127.0.0.1:8000`
 
-export $(grep -v ‘^#’ .env | xargs)
+# API Documentation
 
-pytest -q
+Interactive API documentation is automatically generated using OpenAPI / Swagger UI.
 
-## **Deployment**
+Access documentation at: http://127.0.0.1:8000/docs
 
-Live deployment URL:
+This interface provides:
 
-TO BE ADDED
+    •	endpoint descriptions
 
-After deployment:
+    •	parameter specifications
 
-* Replace base URL in this README
-* Re-run the Smoke Test against the deployed base URL
+    •	example requests
 
-## **Version Control**
+    •	example responses
 
-This repository uses incremental Git commits to demonstrate development progress:
+    •	authentication support
 
-* database models and migrations
-* CRUD endpoints
-* authentication and ownership enforcement
-* analytics endpoints
-* seeding script
-* tests and documentation
+A static PDF version of the documentation is also included in this repository: API_Documentation.pdf
+
+# **Authentication**
+
+The API uses **JWT (JSON Web Token) authentication** **.**
+
+## **Register**
+
+`POST /auth/register`
+
+Example request:
+
+```
+{
+  "email": "user@example.com",
+  "password": "StrongPass123"
+}
+```
+
+## **Login**
+
+POST /auth/login
+
+Example response:
+
+`{
+  "access_token": "<jwt_token>",
+  "token_type": "bearer"
+}`
+
+Include the token in protected requests: Authorization: Bearer <access_token>
+
+# **Error Handling**
+
+The API uses standard HTTP status codes.
+
+| **Code** | **Meaning**  |
+| -------------- | ------------------ |
+| 200            | Successful request |
+| 201            | Resource created   |
+| 204            | Resource deleted   |
+| 400            | Bad request        |
+| 401            | Unauthorized       |
+| 403            | Forbidden          |
+| 404            | Resource not found |
+| 422            | Validation error   |
+
+Ownership enforcement ensures users can only modify incidents they created.
+
+# **Testing**
+
+Testing is implemented using pytest with an isolated test database.
+
+Test coverage includes:
+
+* CRUD endpoint behaviour
+* authentication flows
+* ownership enforcement
+* validation errors
+* analytics aggregation logic
+
+Run tests using: pytest
+
+# **Generative AI Usage**
+
+Generative AI tools (ChatGPT and Gemini) were used to assist with:
+
+* architectural design exploration
+* API framework comparison
+* dataset ingestion strategy
+* documentation refinement
+* debugging guidance
+
+All generated outputs were reviewed, adapted, and validated independently before integration into the project.
+
+Representative conversation excerpts are included in the technical report appendix.
+
+# **Coursework Deliverables**
+
+This repository contains all required coursework deliverables:
+
+* version-controlled source code
+* API documentation (PDF)
+* technical report
+* presentation slides
+* dataset ingestion scripts
+* automated test suite

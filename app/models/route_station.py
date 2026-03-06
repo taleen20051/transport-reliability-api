@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from app.models.station import Station
 
 
+# Association table to link routes and stations with a stop sequence
 class RouteStation(Base):
     __tablename__ = "route_stations"
 

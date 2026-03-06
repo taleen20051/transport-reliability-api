@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from app.models.user_incident import UserIncident
 
 
+# Represents a public transport route (like bus line, train line)
 class Route(Base):
     __tablename__ = "routes"
 

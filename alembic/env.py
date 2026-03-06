@@ -9,12 +9,10 @@ from alembic import context
 from dotenv import load_dotenv
 from sqlalchemy import engine_from_config, pool
 
-# this is the Alembic Config object, which provides access to the values
-# within the .ini file in use.
 config = context.config
 
-# FIX: Ensure we can import `app.*` and always load .env from repo root
-PROJECT_ROOT = Path(__file__).resolve().parents[1]  # repo root (folder containing alembic.ini)
+# Get repo root and add to PYTHONPATH so import app... works, then load .env for DATABASE_URL
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 ENV_PATH = PROJECT_ROOT / ".env"
@@ -23,30 +21,24 @@ load_dotenv(dotenv_path=ENV_PATH)
 database_url = os.getenv("DATABASE_URL")
 if not database_url:
     raise RuntimeError(
-        f"DATABASE_URL is not set. Expected it in {ENV_PATH}. "
-        "Create a .env file at repo root with DATABASE_URL=..."
+        f"DATABASE_URL was not detected. Expected it in {ENV_PATH}. "
+        "Make a .env file at repo root with DATABASE_URL=..."
     )
 
-# Inject into Alembic at runtime (avoid ini interpolation issues)
+# Override the sqlalchemy.url from alembic.ini with our env var
 config.set_main_option("sqlalchemy.url", database_url)
-# ------------------------------------------------------------
 
-# Interpret the config file for Python logging.
+# look for alembic.ini in current directory and load logging config from there
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# ------------------------------------------------------------
-# FIX: Tell Alembic what metadata to scan + ensure models imported
-# ------------------------------------------------------------
-from app.db.base import Base  # noqa: E402
-import app.models  # noqa: F401, E402  (imports Route/Station/etc so Base.metadata has tables)
+from app.db.base import Base
+import app.models
 
 target_metadata = Base.metadata
-# ------------------------------------------------------------
 
-
+# Execute the appropriate migration function based on offline/online mode
 def run_migrations_offline() -> None:
-    """Run migrations in 'offline' mode."""
     url = config.get_main_option("sqlalchemy.url")
     context.configure(
         url=url,
@@ -61,7 +53,6 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
-    """Run migrations in 'online' mode."""
     connectable = engine_from_config(
         config.get_section(config.config_ini_section) or {},
         prefix="sqlalchemy.",

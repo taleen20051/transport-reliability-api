@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from app.models.user_incident import UserIncident
 
 
+# Represents a user of the system who can report incidents
 class User(Base):
     __tablename__ = "users"
 
