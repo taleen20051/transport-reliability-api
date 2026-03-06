@@ -9,9 +9,10 @@ from app.core.config import settings
 from app.db.deps import get_db
 from app.models.user import User
 
+# Extract bearer tokens from incoming authenticated requests
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
-# Dependency to get the current authenticated user based on the JWT token
+# Decode the JWT, extract the user id, and load the matching user record
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -19,6 +20,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
+        # Decode and validate the token using the configured secret and algorithm
         payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
         sub = payload.get("sub")
         if sub is None:

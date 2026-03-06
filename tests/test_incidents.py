@@ -1,3 +1,5 @@
+# Integration tests covering protected incident CRUD behaviour and ownership rules
+
 from tests.conftest import (
     unique_email,
     register_user,
@@ -9,6 +11,7 @@ from tests.conftest import (
 )
 
 
+# Confirm that incident creation is blocked for unauthenticated requests
 def test_incidents_requires_auth(client):
     r = client.post(
         "/incidents",
@@ -23,6 +26,7 @@ def test_incidents_requires_auth(client):
     assert r.status_code == 401
 
 
+# Confirm that the incident owner can create, read, update, and delete their own incident
 def test_incident_crud_owner_can_update_and_delete(client):
     email = unique_email("inc-owner")
     register_user(client, email)
@@ -52,8 +56,8 @@ def test_incident_crud_owner_can_update_and_delete(client):
     assert r.status_code == 404
 
 
+# Confirm that a different authenticated user cannot modify another user's incident
 def test_incident_ownership_forbidden(client):
-    # user1 creates incident
     email1 = unique_email("u1")
     register_user(client, email1)
     token1 = login_user(client, email1)
@@ -62,7 +66,6 @@ def test_incident_ownership_forbidden(client):
     incident = create_incident(client, token1, route_id=route["id"], station_id=None)
     iid = incident["id"]
 
-    # user2 tries to edit user1 incident
     email2 = unique_email("u2")
     register_user(client, email2)
     token2 = login_user(client, email2)

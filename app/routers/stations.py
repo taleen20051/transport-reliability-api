@@ -1,3 +1,5 @@
+# Router exposing CRUD operations for transport stations
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -11,6 +13,7 @@ from app.schemas.station import StationCreate, StationOut, StationUpdate
 
 router = APIRouter(prefix="/stations", tags=["stations"])
 
+# Reusable OpenAPI response descriptions for station endpoints
 STATION_ERROR_RESPONSES = {
     401: {"description": "Unauthorized (missing/invalid Bearer token)"},
     404: {"description": "Not Found (station_id does not exist)"},
@@ -24,11 +27,14 @@ STATION_ERROR_RESPONSES = {
     status_code=status.HTTP_201_CREATED,
     responses={401: STATION_ERROR_RESPONSES[401], 422: STATION_ERROR_RESPONSES[422]},
 )
+
+# Create a new station record. Write access requires authentication
 def create_station(
     payload: StationCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),  # protect write
+    current_user: User = Depends(get_current_user),
 ):
+    # Build the ORM station object from the validated request payload
     station = Station(**payload.model_dump())
     db.add(station)
     db.commit()
@@ -41,6 +47,8 @@ def create_station(
     response_model=StationOut,
     responses={404: STATION_ERROR_RESPONSES[404]},
 )
+
+# Fetch a single station by its identifier
 def get_station(station_id: int, db: Session = Depends(get_db)):
     station = db.query(Station).filter(Station.id == station_id).first()
     if not station:
@@ -54,6 +62,7 @@ def list_stations(
     limit: int = Query(default=100, ge=1, le=500, description="Max number of stations to return"),
     offset: int = Query(default=0, ge=0, description="Pagination offset"),
 ):
+    # Use a stable ordering so pagination results are consistent
     return db.query(Station).order_by(Station.id).offset(offset).limit(limit).all()
 
 
@@ -62,13 +71,16 @@ def list_stations(
     response_model=StationOut,
     responses=STATION_ERROR_RESPONSES,
 )
+
+# Update a station record using only the fields included in the request
 def update_station(
     station_id: int,
     payload: StationUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),  # protect write
+    current_user: User = Depends(get_current_user),
 ):
     station = db.query(Station).filter(Station.id == station_id).first()
+    # Partial update: ignore fields that were not explicitly provided
     if not station:
         raise HTTPException(status_code=404, detail="Station not found")
 
@@ -85,10 +97,12 @@ def update_station(
     status_code=status.HTTP_204_NO_CONTENT,
     responses={401: STATION_ERROR_RESPONSES[401], 404: STATION_ERROR_RESPONSES[404]},
 )
+
+# Delete a station after confirming that it exists
 def delete_station(
     station_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),  # protect write
+    current_user: User = Depends(get_current_user),
 ):
     station = db.query(Station).filter(Station.id == station_id).first()
     if not station:

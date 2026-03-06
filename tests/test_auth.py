@@ -1,6 +1,9 @@
+# Tests covering user registration and login flows
+
 from tests.conftest import unique_email
 
 
+# Ensure a user can register successfully and then obtain a JWT access token
 def test_register_and_login(client):
     email = unique_email("auth")
     password = "StrongPass123"

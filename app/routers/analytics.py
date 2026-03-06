@@ -1,3 +1,5 @@
+# Router exposing analytical endpoints for transport reliability and delay patterns
+
 from __future__ import annotations
 
 from datetime import date, datetime, time, timezone, timedelta
@@ -19,6 +21,8 @@ from app.schemas.analytics import (
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 
+
+# Reusable OpenAPI response descriptions for analytics endpoints
 ANALYTICS_ERROR_RESPONSES = {
     400: {"description": "Bad Request (invalid query parameter)"},
     404: {"description": "Not Found (route/station not found where applicable)"},
@@ -26,11 +30,8 @@ ANALYTICS_ERROR_RESPONSES = {
 }
 
 
+# Convert a calendar date into UTC start/end bounds for consistent date filtering
 def _date_to_utc_bounds(d: date) -> tuple[datetime, datetime]:
-    """
-    Convert a date into [start_of_day_utc, start_of_next_day_utc)
-    so filtering is consistent and timezone-safe.
-    """
     start = datetime.combine(d, time.min).replace(tzinfo=timezone.utc)
     end = start + timedelta(days=1)
     return start, end
@@ -41,6 +42,10 @@ def _date_to_utc_bounds(d: date) -> tuple[datetime, datetime]:
     response_model=ReliabilityOut,
     responses={422: ANALYTICS_ERROR_RESPONSES[422]},
 )
+
+
+# Compute a simple reliability score based on the proportion of incidents
+# whose delay is less than or equal to a configurable threshold
 def reliability_per_route(
     route_id: int,
     from_date: Optional[date] = Query(
@@ -95,6 +100,8 @@ def reliability_per_route(
     response_model=list[DelayBucketOut],
     responses={400: ANALYTICS_ERROR_RESPONSES[400], 422: ANALYTICS_ERROR_RESPONSES[422]},
 )
+
+# Group incidents by hour or weekday to reveal temporal delay patterns
 def delay_distribution(
     group_by: Literal["hour", "weekday"] = Query(
         default="hour", description="Bucket incidents by hour or weekday"
@@ -118,6 +125,7 @@ def delay_distribution(
     if route_id is not None:
         q = q.filter(UserIncident.route_id == route_id)
 
+    # Aggregate the grouped results and return them in bucket order
     rows = q.group_by(bucket_expr).order_by(bucket_expr).all()
 
     return [
@@ -135,6 +143,8 @@ def delay_distribution(
     response_model=HotspotsResponse,
     responses={422: ANALYTICS_ERROR_RESPONSES[422]},
 )
+
+# Rank stations by disruption severity using incident frequency and average delay
 def hotspot_stations(
     window_days: int = Query(default=30, ge=1, le=365, description="Lookback window in days"),
     limit: int = Query(default=10, ge=1, le=50, description="Max results to return"),
@@ -142,7 +152,7 @@ def hotspot_stations(
 ):
     since = datetime.now(timezone.utc) - timedelta(days=window_days)
 
-    # Efficient: aggregate + join station name in one query (no per-row lookups)
+    # Aggregate incident counts and average delays per station in a single query
     rows = (
         db.query(
             UserIncident.station_id.label("station_id"),
@@ -161,6 +171,8 @@ def hotspot_stations(
     for station_id, station_name, incident_count, avg_delay in rows:
         avg_delay_f = float(avg_delay or 0.0)
         incident_count_i = int(incident_count)
+
+        # Pain Index combines how often disruptions occur with how severe they are
         pain_index = round(incident_count_i * avg_delay_f, 2)
 
         results.append(
@@ -173,6 +185,7 @@ def hotspot_stations(
             )
         )
 
+    # Sort stations by highest disruption score first, then apply the result limit.
     results.sort(key=lambda x: x.pain_index, reverse=True)
     results = results[:limit]
 

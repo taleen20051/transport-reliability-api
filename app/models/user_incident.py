@@ -1,3 +1,5 @@
+# SQLAlchemy model representing a disruption reported by a user
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -14,16 +16,20 @@ if TYPE_CHECKING:
     from app.models.user import User
 
 
-# Represents a user-reported incident affecting a route and optionally a station
+# Stores a user-reported incident affecting the transport network
 class UserIncident(Base):
     __tablename__ = "user_incidents"
 
     id: Mapped[int] = mapped_column(primary_key=True)
 
+    # User who reported the incident
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+
+    # Route affected by the disruption
     route_id: Mapped[int] = mapped_column(ForeignKey("routes.id", ondelete="CASCADE"), nullable=False)
     station_id: Mapped[int | None] = mapped_column(ForeignKey("stations.id", ondelete="SET NULL"), nullable=True)
 
+    # Timestamp of when the incident was reported
     reported_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
@@ -31,11 +37,15 @@ class UserIncident(Base):
         index=True,
     )
 
-    # Delay in minutes caused by the incident
+    # Delay duration in minutes caused by the incident
     delay_minutes: Mapped[int] = mapped_column(nullable=False)
     category: Mapped[str | None] = mapped_column(String(50), nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     user: Mapped["User"] = relationship(back_populates="incidents")
+
+    # Relationship back to the affected route
     route: Mapped["Route"] = relationship(back_populates="incidents")
+
+    # Relationship back to the affected station
     station: Mapped["Station"] = relationship(back_populates="incidents")

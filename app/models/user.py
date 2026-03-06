@@ -1,3 +1,5 @@
+# SQLAlchemy model representing an authenticated user of the API
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -11,12 +13,17 @@ if TYPE_CHECKING:
     from app.models.user_incident import UserIncident
 
 
-# Represents a user of the system who can report incidents
+# Users can authenticate and report transport incidents
 class User(Base):
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+
+    # Email used for login and identification
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
+
+    # Securely stored password hash (never plain text)
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
 
+    # Incidents submitted by this user
     incidents: Mapped[list["UserIncident"]] = relationship(back_populates="user")

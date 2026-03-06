@@ -31,6 +31,7 @@ from app.models.station import Station
 NAPTAN_CSV_URL = "https://naptan.api.dft.gov.uk/v1/access-nodes?dataFormat=csv"
 
 
+# Helper to safely read required environment variables
 def _get_env(name: str) -> str:
     value = os.getenv(name)
     if not value:
@@ -41,6 +42,7 @@ def _get_env(name: str) -> str:
     return value
 
 
+# Convert string values to float while safely handling empty or invalid values
 def _safe_float(s: Optional[str]) -> Optional[float]:
     if s is None:
         return None
@@ -53,19 +55,19 @@ def _safe_float(s: Optional[str]) -> Optional[float]:
         return None
 
 
+# Main import routine that downloads the NaPTAN dataset and inserts a small sample into the database
 def main(limit: int, timeout: int) -> None:
     database_url = _get_env("DATABASE_URL")
 
-    # 1) Download CSV
+    # Download the NaPTAN CSV dataset from the official DfT endpoint
     resp = requests.get(NAPTAN_CSV_URL, timeout=timeout)
     resp.raise_for_status()
 
-    # 2) Parse CSV
-    # NaPTAN fields include: CommonName, Latitude, Longitude (and many more)
+    # Parse the CSV so each row can be accessed as a dictionary
     csv_text = resp.text
     reader = csv.DictReader(io.StringIO(csv_text))
 
-    # 3) Connect to DB
+    # Create a SQLAlchemy connection to the project's database
     engine = create_engine(database_url, future=True)
     SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
 
@@ -73,20 +75,23 @@ def main(limit: int, timeout: int) -> None:
     skipped = 0
 
     with SessionLocal() as db:
+
+        # Iterate through dataset rows until the requested sample size is reached
         for row in reader:
             if inserted >= limit:
                 break
 
+            # Extract the station name and coordinates from the dataset row
             name = (row.get("CommonName") or "").strip()
             lat = _safe_float(row.get("Latitude"))
             lon = _safe_float(row.get("Longitude"))
 
-            # Skip rows that can't populate your schema meaningfully
+            # Skip rows that do not contain usable station information
             if not name or lat is None or lon is None:
                 skipped += 1
                 continue
 
-            # Avoid duplicates (simple demo rule)
+            # Prevent inserting duplicate stations with the same name and coordinates
             existing = db.execute(
                 select(Station).where(
                     Station.name == name,
@@ -99,9 +104,11 @@ def main(limit: int, timeout: int) -> None:
                 skipped += 1
                 continue
 
+            # Insert the new station record
             db.add(Station(name=name, lat=lat, lon=lon))
             inserted += 1
 
+        # Persist all inserted stations to the database
         db.commit()
 
     print(f"NaPTAN import complete. Inserted={inserted}, Skipped={skipped}, Limit={limit}")

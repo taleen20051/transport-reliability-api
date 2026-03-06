@@ -1,3 +1,5 @@
+# Router for creating, reading, updating, and deleting user-reported incidents
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -11,6 +13,7 @@ from app.schemas.incident import IncidentCreate, IncidentOut, IncidentUpdate
 
 router = APIRouter(prefix="/incidents", tags=["incidents"])
 
+# Reusable OpenAPI response descriptions for incident endpoints
 INCIDENT_ERROR_RESPONSES = {
     401: {"description": "Unauthorized (missing/invalid Bearer token)"},
     403: {"description": "Forbidden (authenticated but not the owner of the incident)"},
@@ -25,12 +28,14 @@ INCIDENT_ERROR_RESPONSES = {
     status_code=status.HTTP_201_CREATED,
     responses={401: INCIDENT_ERROR_RESPONSES[401], 422: INCIDENT_ERROR_RESPONSES[422]},
 )
+
+# Create a new incident linked to the currently authenticated user
 def create_incident(
     payload: IncidentCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # Pydantic v2: use model_dump()
+    # Attach the incident to the logged-in user rather than trusting client input
     incident = UserIncident(user_id=current_user.id, **payload.model_dump())
     db.add(incident)
     db.commit()
@@ -43,6 +48,8 @@ def create_incident(
     response_model=IncidentOut,
     responses={404: INCIDENT_ERROR_RESPONSES[404]},
 )
+
+# Retrieve a single incident by its identifier
 def get_incident(incident_id: int, db: Session = Depends(get_db)):
     incident = db.query(UserIncident).filter(UserIncident.id == incident_id).first()
     if not incident:
@@ -55,6 +62,8 @@ def get_incident(incident_id: int, db: Session = Depends(get_db)):
     response_model=IncidentOut,
     responses=INCIDENT_ERROR_RESPONSES,
 )
+
+# Update an existing incident, but only if it belongs to the authenticated user
 def update_incident(
     incident_id: int,
     payload: IncidentUpdate,
@@ -62,10 +71,12 @@ def update_incident(
     current_user: User = Depends(get_current_user),
 ):
     incident = db.query(UserIncident).filter(UserIncident.id == incident_id).first()
+
+    # Check that the incident exists before applying ownership rules
     if not incident:
         raise HTTPException(status_code=404, detail="Incident not found")
 
-    # Ownership enforcement (403)
+    # Prevent users from editing incidents reported by someone else
     if incident.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not allowed")
 
@@ -82,6 +93,8 @@ def update_incident(
     status_code=status.HTTP_204_NO_CONTENT,
     responses=INCIDENT_ERROR_RESPONSES,
 )
+
+# Delete an incident, restricted to the user who originally created it
 def delete_incident(
     incident_id: int,
     db: Session = Depends(get_db),
@@ -91,10 +104,10 @@ def delete_incident(
     if not incident:
         raise HTTPException(status_code=404, detail="Incident not found")
 
-    # Ownership enforcement (403)
     if incident.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not allowed")
 
+    # Remove the incident permanently once existence and ownership checks pass
     db.delete(incident)
     db.commit()
     return None
