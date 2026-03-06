@@ -115,55 +115,51 @@ This structure ensures:
 
 ## transport-reliability-api
 
-│
 ├── app
-│   ├── routers        # API endpoint definitions
-│   ├── schemas        # Pydantic request/response models
-│   ├── models         # SQLAlchemy database models
-│   ├── services       # Business logic & analytics computations
-│   ├── auth           # Authentication utilities
-│   └── db             # Database configuration
-│
-├── scripts            # Dataset ingestion scripts
-├── tests              # Pytest integration tests
-├── alembic            # Database migration configuration
-│
-├── API_Documentation.pdf
+│   ├── core        # configuration and security utilities
+│   ├── db          # database setup and dependencies
+│   ├── models      # SQLAlchemy ORM models
+│   ├── routers     # API endpoint definitions
+│   ├── schemas     # Pydantic request/response schemas
+│   └── main.py     # FastAPI application entry point
+├── alembic         # database migration files
+├── docs            # exported API documentation PDF
+├── scripts         # dataset import and seeding scripts
+├── tests           # pytest integration tests
 ├── README.md
-└── requirements.txt
+├── requirements.txt
+└── alembic.ini
 
 # Setup Instructions
 
 ## 1/ Clone the repository
 
-git clone https://github.com/YOUR_USERNAME/transport-reliability-api.git
+git clone https://github.com/taleen20051/transport-reliability-api.git
 
 cd transport-reliability-api
 
 ## 2/ Create the environment
 
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
 
 Windows: .venv\Scripts\activate
 
 ## 3/ Install Dependencies
 
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
 
 # Environment Variables
 
-Create a .env file in the project root.
-
-Example configuration:
+Create a .env file in the project root with the following values:
 
 `DATABASE_URL=postgresql+psycopg://username:password@localhost:5432/transport_db `
 
-`SECRET_KEY=change_this_secret_key `
+`JWT_SECRET_KEY=change_this_secret_key `
 
-`ALGORITHM=HS256 `
+`JWT_ALGORITHM=HS256 `
 
-`ACCESS_TOKEN_EXPIRE_MINUTES=60`
+`JWT_ACCESS_TOKEN_EXPIRE_MINUTES=60`
 
 These variables configure the database connection and JWT authentication system.
 
@@ -191,15 +187,21 @@ The import process:
 * prevents duplicate entries
 * inserts a controlled subset for demonstration purposes
 
+> Make sure the virtual environment is activated and the **.env** file is present before running import scripts.
+
 # **Running the API**
 
-Start the development server using Uvicorn.
+Start the development server using Uvicorn locally using this command
 
-`uvicorn app.main:app --reload`
+`python -m uvicorn app.main:app`
 
 The API will run locally at:
 
 `http://127.0.0.1:8000`
+
+Interactive Swagger documentation is available at:
+
+`http://127.0.0.1:8000/docs`
 
 # API Documentation
 
@@ -219,11 +221,11 @@ This interface provides:
 
     •	authentication support
 
-A static PDF version of the documentation is also included in this repository: API_Documentation.pdf
+A static PDF version of the API documentation is included in this repository at docs/api-documentation.pdf.
 
 # **Authentication**
 
-The API uses **JWT (JSON Web Token) authentication** **.**
+The API uses **JWT (JSON Web Token) authentication.**
 
 ## **Register**
 
