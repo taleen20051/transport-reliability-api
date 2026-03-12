@@ -47,7 +47,6 @@ Example response:
 {
   "route_id": 8,
   "total_incidents": 12,
-  "on_time_incidents": 9,
   "reliability_percent": 75
 }
 ```
@@ -84,27 +83,30 @@ This balances frequency and severity of disruptions.
 
 # **Technology Stack**
 
-| **Layer**      | **Technology**  |
-| -------------------- | --------------------- |
-| Programming Language | Python                |
-| API Framework        | FastAPI               |
-| Database             | PostgreSQL            |
-| ORM                  | SQLAlchemy            |
-| Database Migrations  | Alembic               |
-| Authentication       | JWT (JSON Web Tokens) |
-| Validation           | Pydantic              |
-| Testing              | Pytest                |
-| API Documentation    | OpenAPI / Swagger UI  |
+| **Layer**      | **Technology**     |
+| -------------------- | ------------------------ |
+| Programming Language | Python                   |
+| API Framework        | FastAPI                  |
+| Database             | PostgreSQL               |
+| ORM                  | SQLAlchemy               |
+| Database Migrations  | Alembic                  |
+| Authentication       | JWT (JSON Web Tokens)    |
+| Validation           | Pydantic                 |
+| Testing              | Pytest                   |
+| API Documentation    | OpenAPI / Swagger UI     |
+| Configuration        | Pydantic Settings / .env |
+| Password Hashing     | Passlib + Argon2         |
+| ASGI Server          | Uvicorn                  |
 
 FastAPI was selected for its automatic OpenAPI documentation, strong validation system, and dependency injection support, enabling clean API design and maintainability.
 
 # System Architecture
 
-The API follows a layered architecture separating HTTP routing, business logic, and persistence.
+The API follows a layered structure separating routing, validation, authentication, and persistence.
 
-Client / HTTP Requests -> FastAPI Routers (API Layer) -> Service Layer (Business Logic) -> Persistence Layer (SQLAlchemy ORM) -> PostgreSQL Database
+Client / HTTP Requests -> FastAPI Routers -> Pydantic Validation -> Authentication Dependencies -> SQLAlchemy ORM -> PostgreSQL Database
 
-This structure ensures:
+This structure supports:
 
 * separation of concerns
 * maintainability
@@ -153,15 +155,19 @@ python -m pip install -r requirements.txt
 
 Create a .env file in the project root with the following values:
 
-`DATABASE_URL=postgresql+psycopg://username:password@localhost:5432/transport_db `
+```env
 
-`JWT_SECRET_KEY=change_this_secret_key `
+DATABASE_URL=postgresql+psycopg2://transport:transportpass@localhost:5432/transportdb
 
-`JWT_ALGORITHM=HS256 `
+TEST_DATABASE_URL=postgresql+psycopg2://transport:transportpass@localhost:5432/transportdb_test
 
-`JWT_ACCESS_TOKEN_EXPIRE_MINUTES=60`
+JWT_SECRET_KEY=change_this_secret_key
 
-These variables configure the database connection and JWT authentication system.
+JWT_ALGORITHM=HS256
+
+JWT_ACCESS_TOKEN_EXPIRE_MINUTES=60
+
+These variables configure the database connection, test database connection, and JWT authentication system.
 
 # **Database Setup**
 
@@ -225,7 +231,7 @@ A static PDF version of the API documentation is included in this repository at 
 
 # **Authentication**
 
-The API uses **JWT (JSON Web Token) authentication.**
+The API uses **JWT (JSON Web Token) authentication** for protected write operations.
 
 ## **Register**
 
@@ -246,10 +252,7 @@ POST /auth/login
 
 Example response:
 
-`{
-  "access_token": "<jwt_token>",
-  "token_type": "bearer"
-}`
+`{   "access_token": "<jwt_token>",   "token_type": "bearer" }`
 
 Include the token in protected requests: Authorization: Bearer <access_token>
 
@@ -272,17 +275,26 @@ Ownership enforcement ensures users can only modify incidents they created.
 
 # **Testing**
 
-Testing is implemented using pytest with an isolated test database.
+Testing is implemented using pytest with an isolated PostgreSQL test database.
 
-Test coverage includes:
+The test suite covers:
 
-* CRUD endpoint behaviour
 * authentication flows
+* CRUD endpoint behaviour
 * ownership enforcement
 * validation errors
-* analytics aggregation logic
+* missing-resource handling
+* analytics endpoint behaviour
 
-Run tests using: pytest
+Before running tests, make sure the test database exists and the test database URL is available in your environment.
+
+Example:
+
+```bash
+
+export TEST_DATABASE_URL="postgresql+psycopg2://transport:transportpass@localhost:5432/transportdb_test"
+
+pytest -v
 
 # **Generative AI Usage**
 
@@ -300,11 +312,10 @@ Representative conversation excerpts are included in the technical report append
 
 # **Coursework Deliverables**
 
-This repository contains all required coursework deliverables:
+This repository contains:
 
 * version-controlled source code
 * API documentation (PDF)
-* technical report
-* presentation slides
 * dataset ingestion scripts
 * automated test suite
+* README with setup and running instructions

@@ -6,10 +6,12 @@ import uuid
 from pathlib import Path
 
 import pytest
+from dotenv import load_dotenv
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+load_dotenv()
 # Ensure the application package can be imported when tests are run from the project root
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
