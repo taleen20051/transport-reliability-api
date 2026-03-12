@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.db.deps import get_db
 from app.models.station import Station
+from app.models.route import Route
 from app.models.user_incident import UserIncident
 from app.schemas.analytics import (
     DelayBucketOut,
@@ -40,7 +41,7 @@ def _date_to_utc_bounds(d: date) -> tuple[datetime, datetime]:
 @router.get(
     "/routes/{route_id}/reliability",
     response_model=ReliabilityOut,
-    responses={422: ANALYTICS_ERROR_RESPONSES[422]},
+    responses={404: ANALYTICS_ERROR_RESPONSES[404], 422: ANALYTICS_ERROR_RESPONSES[422]},
 )
 
 
@@ -59,6 +60,10 @@ def reliability_per_route(
     ),
     db: Session = Depends(get_db),
 ):
+    route = db.query(Route).filter(Route.id == route_id).first()
+    if not route:
+        raise HTTPException(status_code=404, detail="Route not found")
+
     q = db.query(UserIncident).filter(UserIncident.route_id == route_id)
 
     if from_date:

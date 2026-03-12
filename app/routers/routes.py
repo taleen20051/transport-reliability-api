@@ -8,7 +8,9 @@ from sqlalchemy.orm import Session
 from app.db.auth_deps import get_current_user
 from app.db.deps import get_db
 from app.models.route import Route
+from app.models.route_station import RouteStation
 from app.models.user import User
+from app.models.user_incident import UserIncident
 from app.schemas.route import RouteCreate, RouteOut, RouteUpdate
 
 router = APIRouter(prefix="/routes", tags=["routes"])
@@ -96,19 +98,25 @@ def update_route(
 @router.delete(
     "/{route_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    responses={401: ROUTE_ERROR_RESPONSES[401], 404: ROUTE_ERROR_RESPONSES[404]},
+    responses=ROUTE_ERROR_RESPONSES,
 )
-
-# Delete a route after confirming it exists
 def delete_route(
     route_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),  # protect write
+    current_user: User = Depends(get_current_user),
 ):
     route = db.query(Route).filter(Route.id == route_id).first()
+
     if not route:
         raise HTTPException(status_code=404, detail="Route not found")
 
+    # Delete dependent incidents first
+    db.query(UserIncident).filter(UserIncident.route_id == route_id).delete()
+
+    # Delete route-station link rows next
+    db.query(RouteStation).filter(RouteStation.route_id == route_id).delete()
+
+    # Now delete the route itself
     db.delete(route)
     db.commit()
     return None

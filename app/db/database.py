@@ -6,6 +6,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.core.config import settings
+from app.db import base # noqa: F401
 
 # Create the SQLAlchemy engine using the configured database URL
 engine = create_engine(
