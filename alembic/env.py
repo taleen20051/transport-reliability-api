@@ -64,7 +64,7 @@ def run_migrations_online() -> None:
 
     with engine.connect() as db_connection:
         context.configure(
-            db_connection=db_connection,
+            connection=db_connection,
             target_metadata=target_metadata,
             compare_type=True,
         )
